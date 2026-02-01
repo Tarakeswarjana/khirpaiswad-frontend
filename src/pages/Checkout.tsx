@@ -97,7 +97,7 @@ const Checkout = () => {
                             paymentMethod: orderPayload.paymentMethod,
                         },
                     });
-                }, 1000);
+                }, 10000);
             } else {
                 // Show QR code on desktop
                 setShowQRCode(true);
