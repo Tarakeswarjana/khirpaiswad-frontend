@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import type { Product, CartItem } from '../types/product';
 import { CartContext } from './cart';
+import type { User } from './cart';
 import { addToCartAPI, getCartAPI } from '../services/api';
 
 export function CartProvider({ children }: { children: ReactNode }) {
@@ -30,6 +31,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
     const [isLoggedIn, setIsLoggedIn] = useState(() => {
         return !!localStorage.getItem('authToken');
+    });
+
+    const [user, setUser] = useState<User | null>(() => {
+        const savedUser = localStorage.getItem('user');
+        return savedUser ? JSON.parse(savedUser) : null;
     });
 
     const [showAuthModal, setShowAuthModal] = useState(false);
@@ -90,13 +96,19 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
     const handleAuthSuccess = () => {
         setIsLoggedIn(true);
+        const savedUser = localStorage.getItem('user');
+        if (savedUser) {
+            setUser(JSON.parse(savedUser));
+        }
         setShowAuthModal(false);
     };
 
     const logout = () => {
         setIsLoggedIn(false);
+        setUser(null);
         clearCart();
         localStorage.removeItem('authToken');
+        localStorage.removeItem('user');
     };
 
     const removeFromCart = (productId: string) => {
@@ -152,6 +164,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
                 getCartCount,
                 isLoggedIn,
                 setIsLoggedIn,
+                user,
+                setUser,
                 showAuthModal,
                 setShowAuthModal,
                 handleAuthSuccess,

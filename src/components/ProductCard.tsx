@@ -21,13 +21,13 @@ const ProductCard = ({ product }: ProductCardProps) => {
     return (
         <div className="group bg-white rounded-2xl shadow-md hover:shadow-2xl transition-all duration-300 overflow-hidden">
             <Link to={`/product/${productId}`} className="block">
-                <div className="relative aspect-[4/3] overflow-hidden bg-gray-100">
+                <div className="relative aspect-4/3 overflow-hidden bg-gray-100">
                     <img
                         src={product.image || (product.images && product.images.length > 0 ? product.images[0] : '')}
                         alt={product.name}
                         className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                    <div className="absolute inset-0 bg-linear-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                     <div className="absolute top-4 right-4 px-3 py-1 bg-white/95 backdrop-blur-sm rounded-full text-xs font-semibold text-amber-700 shadow-lg">
                         {product.category}
                     </div>

@@ -159,7 +159,7 @@ const ProductDetails = () => {
                                 </Link>
                                 <button
                                     onClick={handleAddToCart}
-                                    className={`flex items-center justify-center gap-2 px-5 py-3 rounded-lg font-semibold text-sm transition-all ₹{addedToCart
+                                    className={`flex items-center justify-center gap-2 px-5 py-3 rounded-lg font-semibold text-sm transition-all ${addedToCart
                                         ? 'bg-green-600 hover:bg-green-700'
                                         : 'bg-amber-600 hover:bg-amber-700'
                                         } text-white shadow-md hover:shadow-lg`}

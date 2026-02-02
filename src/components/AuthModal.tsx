@@ -106,7 +106,7 @@ const AuthModal = ({ isOpen, onClose, onLoginSuccess }: AuthModalProps) => {
                         {mode === 'login' ? 'Login' : 'Create Account'}
                     </h2>
                     <button
-                        title='btn'
+                        title='Close authentication modal'
                         onClick={onClose}
                         className="text-gray-500 hover:text-gray-700 transition-colors"
                     >

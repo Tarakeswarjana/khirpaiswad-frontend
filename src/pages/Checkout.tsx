@@ -1,14 +1,34 @@
 import { useState, useRef, useEffect } from 'react';
 import type { FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, User, Phone, Package, MapPin, Home, Building, Globe, X } from 'lucide-react';
+import { Calendar, User, Phone, Package, MapPin, Home, Building, Globe, X, Smartphone } from 'lucide-react';
 import * as qrcode from 'qrcode';
 import { useCart } from '../hooks/useCart';
 import { createOrderAPI } from '../services/api';
+import type { CartItem } from '../types/product';
+
+interface NavigationState {
+    bookingId: string;
+    customerName: string;
+    phone: string;
+    bookingDate: string;
+    items: CartItem[];
+    total: number;
+    status: string;
+    paymentStatus: string;
+    createdAt: string;
+    shippingAddress: {
+        address: string;
+        city: string;
+        postalCode: string;
+        country: string;
+    };
+    paymentMethod: string;
+}
 
 const Checkout = () => {
     const navigate = useNavigate();
-    const { cartItems, getCartTotal } = useCart();
+    const { cartItems, getCartTotal, clearCart } = useCart();
     const total = getCartTotal();
     const qrCanvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -25,9 +45,26 @@ const Checkout = () => {
 
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showQRCode, setShowQRCode] = useState(false);
+    const [bookingIdState, setBookingIdState] = useState<string | null>(null);
+    const [navigationData, setNavigationData] = useState<NavigationState | null>(null);
+    const [showPaymentModal, setShowPaymentModal] = useState(false);
 
     const UPI_URL = 'upi://pay?pa=8250795699@ybl&pn=Aya%20Das&am=1&cu=INR';
-    // "upi://pay?pa=8250795699@ybl&pn=Aya%20Das&am=1&cu=INR&tn=Cozyon%20Order%201234"
+
+    // App-specific UPI URLs
+    const GOOGLE_PAY_URL = 'googlepay://upi/pay?pa=8250795699@ybl&pn=Aya%20Das&am=1&cu=INR';
+    const PHONEPE_URL = 'phonepe://upi/pay?pa=8250795699@ybl&pn=Aya%20Das&am=1&cu=INR';
+    const PAYTM_URL = 'paytmqr://upi/pay?pa=8250795699@ybl&pn=Aya%20Das&am=1&cu=INR';
+
+    const openUPIApp = (appUrl: string) => {
+        // Try to open the specific app
+        window.location.href = appUrl;
+
+        // If the app is not installed, fall back to generic UPI after 2 seconds
+        setTimeout(() => {
+            window.location.href = UPI_URL;
+        }, 2000);
+    };
 
     const isMobileDevice = () => {
         return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -36,6 +73,7 @@ const Checkout = () => {
     const generateQRCode = async () => {
         if (qrCanvasRef.current) {
             try {
+                console.log('QR Canvas ref exists:', qrCanvasRef.current);
                 await qrcode.toCanvas(qrCanvasRef.current, UPI_URL, {
                     width: 250,
                     margin: 2,
@@ -44,21 +82,30 @@ const Checkout = () => {
                         light: '#ffffff',
                     },
                 });
+                console.log('QR Code generated successfully');
             } catch (error) {
                 console.error('Error generating QR code:', error);
             }
+        } else {
+            console.error('QR Canvas ref is null');
         }
     };
 
     useEffect(() => {
         if (showQRCode) {
+            console.log('Generating QR Code...');
+            // Add a small delay to ensure canvas is mounted
+
             generateQRCode();
+
+
         }
     }, [showQRCode]);
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
         setIsSubmitting(true);
+        console.log('Form submitted');
 
         try {
             // Create order via API with pending payment status
@@ -73,64 +120,84 @@ const Checkout = () => {
                 paymentStatus: 'pending', // Initially pending
             };
 
+            console.log('Creating order with payload:', orderPayload);
             const orderResponse = await createOrderAPI(orderPayload);
+            console.log('Order created:', orderResponse);
             const bookingId = orderResponse._id || `BK${Date.now()}`;
 
             // Check if on mobile
-            if (isMobileDevice()) {
-                // Open UPI app on mobile
-                window.location.href = UPI_URL;
-                // Navigate after delay to allow UPI app to open
-                setTimeout(() => {
-                    navigate(`/booking/${bookingId}`, {
-                        state: {
-                            bookingId,
-                            customerName: formData.name,
-                            phone: formData.phone,
-                            bookingDate: formData.bookingDate,
-                            items: cartItems,
-                            total,
-                            status: 'pending',
-                            paymentStatus: 'pending',
-                            createdAt: new Date().toISOString(),
-                            shippingAddress: orderPayload.shippingAddress,
-                            paymentMethod: orderPayload.paymentMethod,
-                        },
-                    });
-                }, 10000);
+            const isMobile = isMobileDevice();
+            console.log('Is Mobile:', isMobile);
+
+            if (isMobile) {
+                // Show payment method selection modal on mobile
+                console.log('Mobile detected, showing payment selection');
+                setNavigationData({
+                    bookingId,
+                    customerName: formData.name,
+                    phone: formData.phone,
+                    bookingDate: formData.bookingDate,
+                    items: cartItems,
+                    total,
+                    status: 'pending',
+                    paymentStatus: 'pending',
+                    createdAt: new Date().toISOString(),
+                    shippingAddress: orderPayload.shippingAddress,
+                    paymentMethod: orderPayload.paymentMethod,
+                });
+                setShowPaymentModal(true);
+
+                setIsSubmitting(false);
             } else {
                 // Show QR code on desktop
+                console.log('Desktop detected, showing QR code modal');
+
+                setBookingIdState(bookingId);
+                setNavigationData({
+                    bookingId,
+                    customerName: formData.name,
+                    phone: formData.phone,
+                    bookingDate: formData.bookingDate,
+                    items: cartItems,
+                    total,
+                    status: 'pending',
+                    paymentStatus: 'pending',
+                    createdAt: new Date().toISOString(),
+                    shippingAddress: orderPayload.shippingAddress,
+                    paymentMethod: orderPayload.paymentMethod,
+                });
+                console.log('Setting showQRCode to true');
                 setShowQRCode(true);
-                // Navigate after QR modal is shown
-                setTimeout(() => {
-                    navigate(`/booking/${bookingId}`, {
-                        state: {
-                            bookingId,
-                            customerName: formData.name,
-                            phone: formData.phone,
-                            bookingDate: formData.bookingDate,
-                            items: cartItems,
-                            total,
-                            status: 'pending',
-                            paymentStatus: 'pending',
-                            createdAt: new Date().toISOString(),
-                            shippingAddress: orderPayload.shippingAddress,
-                            paymentMethod: orderPayload.paymentMethod,
-                        },
-                    });
-                }, 3000);
+                setIsSubmitting(false);
+
             }
+
         } catch (error) {
-            console.error('Error creating order:', error);
+            console.error('Error in handleSubmit:', error);
             alert('Failed to place order. Please try again.');
             setIsSubmitting(false);
         }
     };
 
-    if (cartItems.length === 0) {
-        navigate('/cart');
-        return null;
-    }
+    const handlePaymentMethodSelect = (appUrl: string) => {
+        console.log('Payment method selected, opening app');
+        openUPIApp(appUrl);
+
+        // Navigate after delay
+        setTimeout(() => {
+            if (navigationData) {
+                navigate(`/booking/${navigationData.bookingId}`, {
+                    state: navigationData,
+                });
+            }
+            setShowPaymentModal(false);
+        }, 10000);
+    };
+
+    // if (cartItems.length === 0) {
+    //     navigate('/cart');
+    //     return null;
+    // }
 
     return (
         <div className="py-8">
@@ -273,7 +340,7 @@ const Checkout = () => {
                                     <h3 className="text-lg font-bold text-gray-800 mb-4">Payment Method</h3>
 
                                     <div className="space-y-3">
-                                        <label className="flex items-center p-4 border border-gray-300 rounded-xl cursor-pointer hover:bg-amber-50 transition-all" style={{ borderColor: formData.paymentMethod === 'Online' ? '#b45309' : '' }}>
+                                        <label className={`flex items-center p-4 border rounded-xl cursor-pointer hover:bg-amber-50 transition-all ${formData.paymentMethod === 'Online' ? 'border-amber-600' : 'border-gray-300'}`}>
                                             <input
                                                 type="radio"
                                                 name="paymentMethod"
@@ -312,7 +379,7 @@ const Checkout = () => {
                     </div>
 
                     <div className="lg:col-span-1">
-                        <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl shadow-lg p-6 sticky top-24">
+                        <div className="bg-linear-to-br from-amber-50 to-orange-50 rounded-2xl shadow-lg p-6 sticky top-24">
                             <h2 className="text-xl font-bold text-gray-800 mb-6">Order Summary</h2>
 
                             <div className="space-y-4 mb-6">
@@ -361,7 +428,7 @@ const Checkout = () => {
                         <div className="flex justify-between items-center mb-6">
                             <h3 className="text-2xl font-bold text-gray-800">Scan to Pay</h3>
                             <button
-                                title='btn'
+                                title='Close payment modal'
                                 onClick={() => setShowQRCode(false)}
                                 className="p-2 hover:bg-gray-100 rounded-lg transition-all"
                             >
@@ -369,13 +436,13 @@ const Checkout = () => {
                             </button>
                         </div>
 
-                        <div className="bg-gray-50 rounded-xl p-6 mb-6 flex justify-center">
-                            <canvas ref={qrCanvasRef} />
+                        <div className="bg-gray-50 rounded-xl p-6 mb-6 flex justify-center min-h-64">
+                            <canvas ref={qrCanvasRef} width={250} height={250} />
                         </div>
 
                         <div className="text-center mb-6">
                             <p className="text-gray-600 mb-2">Amount</p>
-                            <p className="text-3xl font-bold text-amber-600">${total.toLocaleString()}</p>
+                            <p className="text-3xl font-bold text-amber-600">₹{total.toLocaleString()}</p>
                         </div>
 
                         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
@@ -385,11 +452,100 @@ const Checkout = () => {
                         </div>
 
                         <button
-                            onClick={() => setShowQRCode(false)}
+                            title='Confirm payment and continue'
+                            onClick={() => {
+                                setShowQRCode(false);
+                                if (bookingIdState && navigationData) {
+                                    clearCart();
+                                    navigate(`/booking/${bookingIdState}`, {
+                                        state: navigationData,
+                                    });
+                                }
+                            }}
                             className="w-full px-4 py-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold transition-all"
                         >
-                            Done
+                            Payment Done - Continue
                         </button>
+                    </div>
+                </div>
+            )}
+            {/* Payment Method Selection Modal */}
+            {showPaymentModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full">
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="text-2xl font-bold text-gray-800">Select Payment App</h3>
+                            <button
+                                title='Close payment selection modal'
+                                onClick={() => setShowPaymentModal(false)}
+                                className="p-2 hover:bg-gray-100 rounded-lg transition-all"
+                            >
+                                <X className="w-6 h-6 text-gray-600" />
+                            </button>
+                        </div>
+
+                        <p className="text-gray-600 mb-6 text-center">Choose your preferred UPI payment app</p>
+
+                        <div className="text-center mb-6 p-4 bg-amber-50 rounded-lg border border-amber-200">
+                            <p className="text-gray-600 text-sm mb-2">Amount to Pay</p>
+                            <p className="text-2xl font-bold text-amber-600">₹{total.toLocaleString()}</p>
+                        </div>
+
+                        <div className="space-y-3">
+                            {/* Google Pay Button */}
+                            <button
+                                title='Pay with Google Pay'
+                                onClick={() => handlePaymentMethodSelect(GOOGLE_PAY_URL)}
+                                className="w-full flex items-center gap-4 p-4 border-2 border-blue-500 rounded-xl hover:bg-blue-50 transition-all"
+                            >
+                                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                                    <span className="text-blue-600 font-bold text-sm">G</span>
+                                </div>
+                                <div className="text-left flex-1">
+                                    <p className="font-bold text-gray-800">Google Pay</p>
+                                    <p className="text-xs text-gray-500">Fast & Secure</p>
+                                </div>
+                                <Smartphone className="w-5 h-5 text-blue-600" />
+                            </button>
+
+                            {/* PhonePe Button */}
+                            <button
+                                title='Pay with PhonePe'
+                                onClick={() => handlePaymentMethodSelect(PHONEPE_URL)}
+                                className="w-full flex items-center gap-4 p-4 border-2 border-purple-500 rounded-xl hover:bg-purple-50 transition-all"
+                            >
+                                <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                                    <span className="text-purple-600 font-bold text-sm">P</span>
+                                </div>
+                                <div className="text-left flex-1">
+                                    <p className="font-bold text-gray-800">PhonePe</p>
+                                    <p className="text-xs text-gray-500">Instant & Cashback</p>
+                                </div>
+                                <Smartphone className="w-5 h-5 text-purple-600" />
+                            </button>
+
+                            {/* Paytm Button */}
+                            <button
+                                title='Pay with Paytm'
+                                onClick={() => handlePaymentMethodSelect(PAYTM_URL)}
+                                className="w-full flex items-center gap-4 p-4 border-2 border-blue-700 rounded-xl hover:bg-blue-50 transition-all"
+                            >
+                                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                                    <span className="text-blue-700 font-bold text-sm">T</span>
+                                </div>
+                                <div className="text-left flex-1">
+                                    <p className="font-bold text-gray-800">Paytm</p>
+                                    <p className="text-xs text-gray-500">Best Offers</p>
+                                </div>
+                                <Smartphone className="w-5 h-5 text-blue-700" />
+                            </button>
+                        </div>
+
+                        <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                            <p className="text-xs text-amber-900">
+                                <strong>Note:</strong> You will be redirected to your selected app to complete the payment.
+                            </p>
+                        </div>
                     </div>
                 </div>
             )}
